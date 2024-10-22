@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Data Table</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <h1>Usuarios</h1>
+
+    <!-- Filtros -->
+    <input type="text" id="name-filter" placeholder="Buscar por nombre" oninput="applyFilters()">
+    <input type="number" id="min-age" placeholder="Edad mínima" oninput="applyFilters()">
+    <input type="number" id="max-age" placeholder="Edad máxima" oninput="applyFilters()">
+
+    <!-- Tabla de datos -->
+    <table border="1">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Nombre</th>
+                <th>Edad</th>
+                <th>Acciones</th>
+            </tr>
+        </thead>
+        <tbody id="user-table">
+            <!-- Los datos se insertarán aquí dinámicamente -->
+        </tbody>
+    </table>
+
+    <!-- Paginación -->
+    <button onclick="prevPage()">Anterior</button>
+    <button onclick="nextPage()">Siguiente</button>
+
+    <!-- Formulario para agregar un nuevo usuario -->
+    <h2>Agregar Usuario</h2>
+    <form id="add-user-form">
+        <input type="text" id="name" placeholder="Nombre" required>
+        <input type="number" id="age" placeholder="Edad" required>
+        <button type="submit">Agregar Usuario</button>
+    </form>
+
+    <!-- Gráfico de Edades -->
+    <h2>Distribución de Edades</h2>
+    <canvas id="ageChart" width="400" height="50"></canvas>
+
+    <script>
+        let currentPage = 1;
+        const perPage = 5;
+        let allUsers = []; // Almacenar todos los usuarios aquí
+        let ageChart = null; // Variable para almacenar el gráfico actual
+
+        // Función para obtener los datos de la API
+        function fetchUsers() {
+            fetch(`http://127.0.0.1:5000/api/data?page=${currentPage}&per_page=${perPage}`)
+                .then(response => response.json())
+                .then(data => {
+                    allUsers = data; // Guardar todos los usuarios en la variable global
+                    updateTable(data);
+                    updateChart(data);
+                });
+        }
+
+        // Función para actualizar la tabla
+        function updateTable(data) {
+            const tableBody = document.getElementById('user-table');
+            tableBody.innerHTML = '';
+            data.forEach(user => {
+                tableBody.innerHTML += `
+                    <tr>
+                        <td>${user.id}</td>
+                        <td>${user.name}</td>
+                        <td>${user.age}</td>
+                        <td><button onclick="deleteUser(${user.id})">Eliminar</button></td>
+                    </tr>
+                `;
+            });
+        }
+
+        // Función para eliminar un usuario
+        function deleteUser(userId) {
+            fetch(`http://127.0.0.1:5000/api/data/${userId}`, { method: 'DELETE' })
+                .then(() => {
+                    alert('Usuario eliminado');
+                    fetchUsers();
+                });
+        }
+
+        // Función para agregar un nuevo usuario
+        document.getElementById('add-user-form').addEventListener('submit', function(event) {
+            event.preventDefault();
+            const name = document.getElementById('name').value;
+            const age = document.getElementById('age').value;
+
+            fetch('http://127.0.0.1:5000/api/data', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, age: parseInt(age) })
+            })
+            .then(response => response.json())
+            .then(data => {
+                alert('Usuario agregado');
+                fetchUsers();
+            });
+        });
+
+        // Paginación
+        function nextPage() {
+            currentPage++;
+            fetchUsers();
+        }
+
+        function prevPage() {
+            if (currentPage > 1) {
+                currentPage--;
+                fetchUsers();
+            }
+        }
+
+        // Filtrar por nombre y edad
+        function applyFilters() {
+            let nameFilter = document.getElementById('name-filter').value;
+            let minAge = document.getElementById('min-age').value || 0;
+            let maxAge = document.getElementById('max-age').value || 100;
+
+            // Filtrar usuarios desde la variable global
+            let filteredData = allUsers.filter(user => 
+                user.name.toLowerCase().includes(nameFilter.toLowerCase()) &&
+                user.age >= minAge && user.age <= maxAge
+            );
+            updateTable(filteredData);
+            updateChart(filteredData);
+        }
+
+        // Actualizar gráfico
+        function updateChart(data) {
+            const ctx = document.getElementById('ageChart').getContext('2d');
+            const ages = data.map(user => user.age);
+            const ageCounts = [
+                ages.filter(age => age <= 20).length,
+                ages.filter(age => age > 20 && age <= 30).length,
+                ages.filter(age => age > 30 && age <= 40).length,
+                ages.filter(age => age > 40).length
+            ];
+
+            // Destruir el gráfico existente antes de crear uno nuevo
+            if (ageChart) {
+                ageChart.destroy();
+            }
+
+            ageChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ['0-20', '21-30', '31-40', '41+'],
+                    datasets: [{
+                        label: 'Número de Usuarios',
+                        data: ageCounts,
+                        backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                        borderColor: 'rgba(75, 192, 192, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: { scales: { y: { beginAtZero: true } } }
+            });
+        }
+
+        // Inicializar
+        fetchUsers();
+    </script>
+</body>
+</html>
